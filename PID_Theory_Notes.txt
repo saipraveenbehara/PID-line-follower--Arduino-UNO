@@ -1,0 +1,156 @@
+# PID Controller — Theory and Implementation Notes
+# Created by Sai Praveen Behara
+# Line-Following Robot Project
+
+===============================================================
+ WHAT IS A PID CONTROLLER?
+===============================================================
+
+A PID controller is a feedback control loop that calculates a
+correction output based on three terms computed from the error
+between a desired setpoint and a measured process value.
+
+  Error (e) = Setpoint - Measured Value
+
+In this project:
+  Setpoint      = 0.0  (line centred under the sensor array)
+  Measured Value = weighted average position of the detected line
+  Error         = how far the line is from the centre sensor
+
+The controller output is the steering correction applied to the
+two motors.
+
+---------------------------------------------------------------
+ THE THREE TERMS
+---------------------------------------------------------------
+
+  P (Proportional)
+  ----------------
+  Output = KP * e
+
+  Responds immediately and proportionally to the current error.
+  Large error -> large correction. Zero error -> zero correction.
+
+  Effect of KP:
+    Too low  : robot barely corrects, drifts off line
+    Correct  : robot tracks line with acceptable weave
+    Too high : robot oscillates rapidly left and right
+
+  I (Integral)
+  ------------
+  Output = KI * sum(e * dt)
+
+  Accumulates all past errors over time. Eliminates steady-state
+  offset (persistent one-sided drift). Rarely needed for line
+  following because the track geometry usually self-corrects.
+
+  Effect of KI:
+    Too low  : persistent drift to one side on straights
+    Correct  : drift eliminated
+    Too high : slow growing oscillation, integral windup
+
+  Anti-windup: the accumulated integral is clamped to +/-
+  INTEGRAL_LIMIT to prevent unbounded growth during line-lost
+  events or long straight runs.
+
+  D (Derivative)
+  --------------
+  Output = KD * (e[n] - e[n-1]) / dt
+
+  Responds to the rate of change of error. Predicts where the
+  error is heading and applies a braking force before it
+  overshoots. This is the key term for damping oscillation.
+
+  Effect of KD:
+    Too low  : oscillation from KP is not dampened
+    Correct  : smooth, fast response with no overshoot
+    Too high : very twitchy, reacts to sensor noise
+
+---------------------------------------------------------------
+ COMBINED OUTPUT
+---------------------------------------------------------------
+
+  correction = (KP * e) + (KI * integral) + (KD * derivative)
+
+  leftMotorSpeed  = BASE_SPEED + correction
+  rightMotorSpeed = BASE_SPEED - correction
+
+  When correction > 0: line is to the right
+    -> left motor speeds up, right motor slows down
+    -> robot steers right to reacquire the line
+
+  When correction < 0: line is to the left
+    -> right motor speeds up, left motor slows down
+    -> robot steers left to reacquire the line
+
+===============================================================
+ SENSOR WEIGHTING SCHEME
+===============================================================
+
+The 5 IR sensors are assigned integer position weights:
+
+  Sensor index :  0     1     2     3     4
+  Weight       : -2    -1     0    +1    +2
+  Position     : Left        Centre       Right
+
+When the robot reads sensors, the weighted average of all
+active (on-line) sensors is computed:
+
+  error = sum(weight[i] * sensor[i]) / count(active sensors)
+
+Examples:
+
+  Sensors active: [0,0,1,0,0]  ->  error = 0.0   (centred)
+  Sensors active: [1,1,0,0,0]  ->  error = -1.5  (far left)
+  Sensors active: [0,0,0,1,1]  ->  error = +1.5  (far right)
+  Sensors active: [0,1,1,0,0]  ->  error = -0.5  (slightly left)
+
+The fractional error value gives smoother PID behaviour compared
+to a simple on/off sensor index approach.
+
+===============================================================
+ LOOP TIMING
+===============================================================
+
+The control loop runs as fast as the Arduino can execute it
+(approximately 1-5 kHz without serial debug output). This is
+faster than necessary for typical motor speeds, but the fast
+sampling rate improves the derivative term accuracy.
+
+If LOOP_DELAY_MS is set to a non-zero value, the loop runs at
+a fixed rate. This is useful for:
+  - Making KD tuning more predictable (dt becomes constant)
+  - Reducing CPU load (not necessary on Uno but useful on
+    slower boards)
+
+For most tracks, LOOP_DELAY_MS = 0 (maximum rate) is fine.
+
+===============================================================
+ COMMON PROBLEMS AND FIXES
+===============================================================
+
+Robot oscillates wildly on the line:
+  -> KP is too high. Reduce by 20-30%.
+  -> KD is too low. Increase KD.
+
+Robot tracks line but with a slow wide weave:
+  -> KP is slightly high. Reduce slightly.
+  -> KD is correctly damping but KP is the root cause.
+
+Robot loses the line on sharp curves:
+  -> BASE_SPEED is too high for the track.
+  -> KP may need to increase to react faster.
+  -> MAX_SPEED clamp may be preventing full correction.
+
+Robot drifts to one side on perfectly straight sections:
+  -> One motor is slightly slower than the other (mechanical).
+  -> Increase KI very slightly (0.01 to 0.1).
+  -> Or add a static offset to the weaker motor's speed.
+
+Robot stops or reverses unexpectedly:
+  -> MIN_SPEED is too low, motor stalls and causes a sharp
+     correction spike. Increase MIN_SPEED.
+
+Serial output causes the robot to miss corrections:
+  -> Disable debugPrint() for competition runs. Serial.print()
+     adds significant latency at 115200 baud.

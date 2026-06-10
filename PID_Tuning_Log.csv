@@ -1,0 +1,24 @@
+# PID Tuning Log
+# Created by Sai Praveen Behara
+#
+# Instructions:
+#   Fill in one row per tuning session.
+#   Column separator is a comma. Open in any spreadsheet app.
+#
+# Columns:
+#   Date        - date of session (YYYY-MM-DD)
+#   KP          - proportional gain used
+#   KI          - integral gain used
+#   KD          - derivative gain used
+#   BASE_SPEED  - base motor PWM value (0-255)
+#   Track       - brief description of test track (e.g. "oval tight", "figure-8")
+#   Observation - what the robot did (e.g. "oscillates", "smooth", "lost line on curve")
+#   Action      - what was changed for the next session
+
+Date,KP,KI,KD,BASE_SPEED,Track,Observation,Action
+2024-01-01,5,0,0,120,straight line,drifts off line slowly,increase KP
+2024-01-01,10,0,0,120,straight line,mild weave tracks line,increase KP further
+2024-01-01,20,0,0,120,straight line,fast oscillation,back off KP to 15 and add KD
+2024-01-01,15,0,3,120,oval,smooth on straights slight weave on curves,increase KD
+2024-01-01,15,0,5,120,oval,smooth tracking,test on faster speed
+2024-01-01,15,0,5,160,oval,good tracking at higher speed,
